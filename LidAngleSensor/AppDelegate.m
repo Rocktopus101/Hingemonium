@@ -220,9 +220,11 @@ static const int kKeyToMidiNote[] = {
             return;
         }
 
-        double instantVelocity = fabs(angle - self.lastLidAngle) / deltaTime;
-        double pumpFactor = 0.015;
-        self.airPressure += instantVelocity * pumpFactor;
+        if (angle < self.lastLidAngle) {
+            double instantVelocity = (self.lastLidAngle - angle) / deltaTime;
+            double pumpFactor = 0.015;
+            self.airPressure += instantVelocity * pumpFactor;
+        }
         
         double decayRate = 0.5;
         self.airPressure -= decayRate * deltaTime;
