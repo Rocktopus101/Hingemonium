@@ -28,4 +28,11 @@
     [self.delegate keyCaptureView:self didReceiveKeyUp:event];
 }
 
+- (void)scrollWheel:(NSEvent *)event {
+    // Forward the scrolling delta to the delegate
+    if ([self.delegate respondsToSelector:@selector(keyCaptureView:didScrollWithDelta:)]) {
+        [self.delegate keyCaptureView:self didScrollWithDelta:event.scrollingDeltaY];
+    }
+}
+
 @end

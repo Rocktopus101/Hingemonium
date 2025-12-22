@@ -13,6 +13,7 @@
 @protocol KeyCaptureViewDelegate <NSObject>
 - (void)keyCaptureView:(KeyCaptureView *)view didReceiveKeyDown:(NSEvent *)event;
 - (void)keyCaptureView:(KeyCaptureView *)view didReceiveKeyUp:(NSEvent *)event;
+- (void)keyCaptureView:(KeyCaptureView *)view didScrollWithDelta:(CGFloat)deltaY;
 @end
 
 @interface KeyCaptureView : NSView
