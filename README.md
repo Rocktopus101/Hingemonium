@@ -42,6 +42,16 @@ Right now, the code doesn't really work for piano style sharper notes so if you 
 **Why is the size so big?**
 It's the 40 high quality Harmonium sounds.
 
+----
+## Star History
+
+<a href="https://www.star-history.com/?repos=rocktopus101%2Fhingemonium&type=date&logscale=&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=rocktopus101/hingemonium&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=rocktopus101/hingemonium&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=rocktopus101/hingemonium&type=date&legend=top-left" />
+ </picture>
+</a>
 -----
 
 ## Origins & Big Thanks
