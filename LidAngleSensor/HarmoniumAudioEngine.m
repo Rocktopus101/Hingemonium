@@ -197,8 +197,26 @@ static const float kFadeOutRate = 2.5f; // Higher value = faster fade-out
     }
 }
 
+- (void)releaseAllNotes {
+    // Move all active notes to fading notes
+    NSArray *activeNoteKeys = [self.activePlayers.allKeys copy];
+    for (NSNumber *midiNote in activeNoteKeys) {
+        AVAudioPlayerNode *player = self.activePlayers[midiNote];
+        if (player) {
+            [self.activePlayers removeObjectForKey:midiNote];
+            self.fadingPlayers[midiNote] = player;
+        }
+    }
+}
+
 - (void)updateVolume:(float)volume {
+    float previousVolume = self.currentVolume;
     self.currentVolume = fmaxf(0.0f, fminf(1.0f, volume));
+    
+    // If volume drops to 0 (air pressure lost), release all active notes
+    if (self.currentVolume == 0.0f && previousVolume > 0.0f) {
+        [self releaseAllNotes];
+    }
     
     // Only apply the "air pressure" volume to actively held notes
     for (AVAudioPlayerNode *player in self.activePlayers.allValues) {
