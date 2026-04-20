@@ -80,6 +80,20 @@ static const int kKeyToMidiNote[] = {
     if (midiNote > 0) {
         [self.harmoniumEngine releaseNote:midiNote];
     }
+
+}
+
+- (void)keyCaptureView:(KeyCaptureView *)view didScrollWithDelta:(CGFloat)deltaY {
+    // Only allow manual pumping if the "Max Air" toggle is OFF
+    if (self.airPressureToggle.state == NSControlStateValueOff) {
+        // Sensitivity factor - adjust to taste. 0.05 provides a reasonable feel.
+        CGFloat pumpAmount = fabs(deltaY) * 0.05;
+        self.airPressure += pumpAmount;
+        self.airPressure = fminf(1.0, self.airPressure); // Clamp to max 1.0
+        
+        // Ensure lastUpdateTime is updated effectively in the main loop, 
+        // but explicit modification here isn't strictly necessary as the main loop handles decay.
+    }
 }
 
 
@@ -127,7 +141,7 @@ static const int kKeyToMidiNote[] = {
     self.legendLabel.stringValue = @"-";
     
     self.instructionsLabel = [[NSLabel alloc] init];
-    self.instructionsLabel.stringValue = @"Move the lid to pump the bellows or use the 'Max Air' toggle.";
+    self.instructionsLabel.stringValue = @"Move lid or scroll to pump bellows, or use 'Max Air'.";
     self.instructionsLabel.alignment = NSTextAlignmentCenter;
     
     // Add ALL views to the content view
