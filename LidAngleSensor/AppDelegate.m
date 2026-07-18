@@ -251,7 +251,6 @@ static const char kBlackKeys[] = {'s', 'd', 'g', 'h', 'j', 'l'};
         @"Minor Pentatonic":      @[@0, @3, @5, @7, @10]
     };
 
-    self.mappedKeys = @[@'z', @'s', @'x', @'d', @'c', @'v', @'g', @'b', @'h', @'n', @'j', @'m', @',', @'l', @'.'];
     [self.scalePopUpButton addItemsWithTitles:self.availableScales];
     self.currentScale = self.availableScales[0];
 }
@@ -347,23 +346,6 @@ static const char kBlackKeys[] = {'s', 'd', 'g', 'h', 'j', 'l'};
 
 - (void)windowDidResignKey:(NSNotification *)notification {
     [self.harmoniumEngine releaseAllNotes];
-}
-
-- (BOOL)handleKeyDown:(NSEvent *)event {
-    if (event.isARepeat) return NO;
-
-    NSString *keyStr = event.charactersIgnoringModifiers.lowercaseString;
-    if (keyStr.length == 0) return NO;
-
-    char character = [keyStr characterAtIndex:0];
-    int midiNote = [self getMidiNoteForKey:character];
-
-    if (midiNote > 0) {
-        [self.harmoniumEngine playNote:midiNote];
-        return YES; // We handled it, suppress the beep!
-    }
-
-    return NO; // Not a key we handle
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
