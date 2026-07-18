@@ -197,6 +197,12 @@ static const float kFadeOutRate = 2.5f; // Higher value = faster fade-out
     }
 }
 
+- (void)releaseAllNotes {
+    for (NSNumber *midiNote in self.activePlayers.allKeys) {
+        [self releaseNote:midiNote.intValue];
+    }
+}
+
 - (void)updateVolume:(float)volume {
     self.currentVolume = fmaxf(0.0f, fminf(1.0f, volume));
     

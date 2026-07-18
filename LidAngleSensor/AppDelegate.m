@@ -15,6 +15,11 @@ static const int kKeyToMidiNote[] = {
     [','] = 60, ['l'] = 61, ['.'] = 62
 };
 
+// The two physical rows, like a piano: white keys on the bottom row,
+// black keys (sharps/flats) on the row above.
+static const char kWhiteKeys[] = {'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.'};
+static const char kBlackKeys[] = {'s', 'd', 'g', 'h', 'j', 'l'};
+
 @implementation AppDelegate
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     // --- Window and Custom View Setup ---
@@ -47,6 +52,13 @@ static const int kKeyToMidiNote[] = {
     [self setupUI];
     [self setupScales];
     [self updateLegend]; // Initial legend update
+
+    // Release any held notes if the window loses focus, since keyUp events
+    // will never arrive for them.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(windowDidResignKey:)
+                                                 name:NSWindowDidResignKeyNotification
+                                               object:self.window];
 
     // --- Start Update Timer ---
     self.updateTimer = [NSTimer scheduledTimerWithTimeInterval:0.02
@@ -185,64 +197,40 @@ static const int kKeyToMidiNote[] = {
 }
 
 - (void)update {
-    if (!self.lidSensor.isAvailable && self.airPressureToggle.state == NSControlStateValueOff) {
-        self.angleLabel.stringValue = @"Sensor N/A";
-        // Set air pressure to 0 if sensor is unavailable and toggle is off
-        self.airPressure = 0.0;
-        [self.harmoniumEngine updateVolume:(float)self.airPressure];
-        return;
-    }
-    
-    double angle = [self.lidSensor lidAngle];
+    // Compute the frame delta once, up front, so every consumer (pump model,
+    // fade-outs) sees the same, correct value.
     double currentTime = CACurrentMediaTime();
-    
-    // --- 2. Update Air Pressure Model ---
+    double deltaTime = currentTime - self.lastUpdateTime;
+    self.lastUpdateTime = currentTime;
+    if (deltaTime < 0 || deltaTime > 0.5) deltaTime = 0; // startup gap or sleep/wake jump
+
     if (self.airPressureToggle.state == NSControlStateValueOn) {
-        // If the toggle is ON, force air pressure to 100%
         self.airPressure = 1.0;
+        self.angleLabel.stringValue = @"Air Pressure: 100% (Max Air)";
+    } else if (!self.lidSensor.isAvailable) {
+        self.airPressure = 0.0;
+        self.angleLabel.stringValue = @"Sensor N/A";
     } else {
-        // Otherwise, use the existing lid sensor logic
+        double angle = [self.lidSensor lidAngle];
         if (angle < 0) {
             self.angleLabel.stringValue = @"Read Error";
-            return;
-        }
-
-        if (self.lastLidAngle < 0) {
+        } else {
+            if (self.lastLidAngle >= 0 && deltaTime > 0) {
+                double instantVelocity = fabs(angle - self.lastLidAngle) / deltaTime;
+                double pumpFactor = 0.015;
+                self.airPressure += instantVelocity * pumpFactor;
+            }
+            double decayRate = 0.5;
+            self.airPressure -= decayRate * deltaTime;
+            self.airPressure = fmax(0.0, fmin(1.0, self.airPressure));
             self.lastLidAngle = angle;
-            self.lastUpdateTime = currentTime;
-            return;
+            self.angleLabel.stringValue = [NSString stringWithFormat:@"Angle: %.1f° | Air Pressure: %.0f%%", angle, self.airPressure * 100];
         }
-
-        double deltaTime = currentTime - self.lastUpdateTime;
-        if (deltaTime <= 0 || deltaTime > 0.5) {
-            self.lastLidAngle = angle;
-            self.lastUpdateTime = currentTime;
-            return;
-        }
-
-        double instantVelocity = fabs(angle - self.lastLidAngle) / deltaTime;
-        double pumpFactor = 0.015;
-        self.airPressure += instantVelocity * pumpFactor;
-        
-        double decayRate = 0.5;
-        self.airPressure -= decayRate * deltaTime;
-        self.airPressure = fmax(0.0, fmin(1.0, self.airPressure));
-
-        // Save state for the next frame
-        self.lastLidAngle = angle;
-        self.lastUpdateTime = currentTime;
     }
 
-    [self.harmoniumEngine processFadesWithDeltaTime:(currentTime - self.lastUpdateTime)];
-
-    // --- 3. Update UI and Audio Engine ---
-    self.angleLabel.stringValue = [NSString stringWithFormat:@"Angle: %.1f° | Air Pressure: %.0f%%", angle, self.airPressure * 100];
     [self.harmoniumEngine updateVolume:(float)self.airPressure];
-
-    // This check ensures lastUpdateTime is always updated, even when toggled on
-    if (self.airPressureToggle.state == NSControlStateValueOff) {
-        self.lastUpdateTime = currentTime;
-    }
+    // Fades must run every frame with the real delta, or released notes never stop.
+    [self.harmoniumEngine processFadesWithDeltaTime:deltaTime];
 }
 - (void)namingModeDidChange:(NSPopUpButton *)sender {
     self.currentNamingMode = (NoteNamingMode)sender.indexOfSelectedItem;
@@ -262,7 +250,6 @@ static const int kKeyToMidiNote[] = {
         @"Bhairavi Thaat":        @[@0, @1, @3, @5, @7, @8, @10], // Sa, re, ga, Ma, Pa, dha, ni
         @"Minor Pentatonic":      @[@0, @3, @5, @7, @10]
     };
-    self.mappedKeys = @[@'z', @'s', @'x', @'d', @'c', @'v', @'g', @'b', @'h', @'n', @'j', @'m', @',', @'l', @'.'];
 
     [self.scalePopUpButton addItemsWithTitles:self.availableScales];
     self.currentScale = self.availableScales[0];
@@ -275,50 +262,51 @@ static const int kKeyToMidiNote[] = {
 }
 
 - (void)updateLegend {
+    // Two rows, mirroring the physical keyboard: black keys above, white below.
     NSMutableString *legendText = [NSMutableString string];
     [legendText appendString:@"Keyboard Mapping:\n\n"];
-    
-    for (int i = 0; i < self.mappedKeys.count; i++) {
-        char key = [self.mappedKeys[i] charValue];
-        int midiNote = [self getMidiNoteForKey:key];
-        NSString *noteName = [self noteNameForMidi:midiNote];
-        
-        // Format as "Z: C3 " with padding
-        [legendText appendFormat:@"%c: %-4s", toupper(key), [noteName UTF8String]];
-        
-        // Add a newline after every 5 keys for readability
-        if ((i + 1) % 5 == 0) {
-            [legendText appendString:@"\n"];
+
+    [legendText appendString:@"Black keys:  "];
+    if ([self.currentScale isEqualToString:@"Chromatic"]) {
+        for (int i = 0; i < (int)sizeof(kBlackKeys); i++) {
+            char key = kBlackKeys[i];
+            NSString *noteName = [self noteNameForMidi:[self getMidiNoteForKey:key]];
+            [legendText appendFormat:@"%c:%-5s", toupper(key), [noteName UTF8String]];
         }
+    } else {
+        [legendText appendString:@"(not used in this scale)"];
+    }
+
+    [legendText appendString:@"\nWhite keys:  "];
+    for (int i = 0; i < (int)sizeof(kWhiteKeys); i++) {
+        char key = kWhiteKeys[i];
+        NSString *noteName = [self noteNameForMidi:[self getMidiNoteForKey:key]];
+        [legendText appendFormat:@"%c:%-5s", toupper(key), [noteName UTF8String]];
     }
     self.legendLabel.stringValue = legendText;
 }
 
 - (int)getMidiNoteForKey:(char)key {
-    int baseNote = kKeyToMidiNote[key];
+    // Guard: non-ASCII keys (arrows, function keys) truncate to arbitrary
+    // char values and must not index into the mapping table.
+    if (key < 0 || key >= (int)(sizeof(kKeyToMidiNote) / sizeof(kKeyToMidiNote[0]))) return -1;
+    int baseNote = kKeyToMidiNote[(unsigned char)key];
     if (baseNote == 0) return -1;
-    
-    int finalNote = baseNote;
-    if (![self.currentScale isEqualToString:@"Chromatic"]) {
-        NSArray<NSNumber *> *scaleIntervals = self.scaleNoteMapping[self.currentScale];
-        int rootNote = 48; // C3
-        
-        int closestNoteInScale = -1;
-        int minDistance = 100;
-        
-        for (int octave = -1; octave <= 2; octave++) {
-            for (NSNumber *interval in scaleIntervals) {
-                int noteInScale = rootNote + interval.intValue + (octave * 12);
-                int distance = abs(noteInScale - baseNote);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestNoteInScale = noteInScale;
-                }
-            }
+
+    if ([self.currentScale isEqualToString:@"Chromatic"]) return baseNote;
+
+    // Scale mode: the white-key row walks the scale degrees in order
+    // (wrapping into the next octave); black keys are unused. This keeps
+    // every key on a distinct note instead of snapping neighbors together.
+    NSArray<NSNumber *> *scaleIntervals = self.scaleNoteMapping[self.currentScale];
+    int rootNote = 48; // C3
+    int count = (int)scaleIntervals.count;
+    for (int i = 0; i < (int)(sizeof(kWhiteKeys) / sizeof(kWhiteKeys[0])); i++) {
+        if (kWhiteKeys[i] == key) {
+            return rootNote + scaleIntervals[i % count].intValue + 12 * (i / count);
         }
-        finalNote = closestNoteInScale;
     }
-    return finalNote;
+    return -1;
 }
 - (NSString *)noteNameForMidi:(int)midiNote {
     if (midiNote < 0) return @"-";
@@ -356,21 +344,8 @@ static const int kKeyToMidiNote[] = {
 }
 
 
-- (BOOL)handleKeyDown:(NSEvent *)event {
-    if (event.isARepeat) return NO;
-    
-    NSString *keyStr = event.charactersIgnoringModifiers.lowercaseString;
-    if (keyStr.length == 0) return NO;
-    
-    char character = [keyStr characterAtIndex:0];
-    int midiNote = [self getMidiNoteForKey:character];
-    
-    if (midiNote > 0) {
-        [self.harmoniumEngine playNote:midiNote];
-        return YES; // We handled it, suppress the beep!
-    }
-    
-    return NO; // Not a key we handle
+- (void)windowDidResignKey:(NSNotification *)notification {
+    [self.harmoniumEngine releaseAllNotes];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {

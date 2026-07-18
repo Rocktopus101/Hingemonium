@@ -19,6 +19,7 @@
 // Note control methods
 - (void)playNote:(int)midiNote;
 - (void)releaseNote:(int)midiNote;
+- (void)releaseAllNotes;
 - (void)processFadesWithDeltaTime:(double)deltaTime;
 
 

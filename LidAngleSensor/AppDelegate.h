@@ -47,6 +47,5 @@ typedef NS_ENUM(NSInteger, NoteNamingMode) {
 @property (strong) NSDictionary<NSString *, NSArray<NSNumber *> *> *scaleNoteMapping;
 @property (strong) NSString *currentScale;
 @property (nonatomic, assign) NoteNamingMode currentNamingMode;
-@property (strong) NSArray<NSNumber *> *mappedKeys; // To iterate keys in order
 
 @end
